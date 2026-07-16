@@ -30,9 +30,9 @@ async function restoreDefaults() {
   <main class="popup">
     <header class="brand">
       <span class="brand-icon" aria-hidden="true"><ImagePlus :size="19" :stroke-width="2" /></span>
-      <span>
+      <span class="brand-copy">
         <strong>Squoosh Batch</strong>
-        <small>Image queue controls</small>
+        <small>Batch image uploads for Squoosh.</small>
       </span>
     </header>
 
@@ -59,5 +59,9 @@ async function restoreDefaults() {
         </button>
       </div>
     </section>
+
+    <a class="site-button" href="https://squoosh.app/" target="_blank" rel="noreferrer" aria-label="Open Squoosh">
+      Open Squoosh
+    </a>
   </main>
 </template>

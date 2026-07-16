@@ -1,15 +1,15 @@
-# Squoosh Batch
+# Squoosh Batch – Bulk Image Workflow for Squoosh
 
-Batch image upload and image queue browser extension for [Squoosh.app](https://squoosh.app/).
+Batch and bulk image upload workflow for [Squoosh.app](https://squoosh.app/).
 
-Squoosh Batch adds a multi-image queue to Squoosh. Select several images once, then switch between them from the side panel while keeping Squoosh as the image editor and compressor.
+Squoosh Batch adds a multi-image queue to Squoosh. Select multiple images once, then switch between them from the side panel while keeping Squoosh as the image editor and compressor.
 
 ## Features
 
-- Select or drag multiple images into one queue.
+- Select or drag multiple images into one batch queue.
 - Browse images by thumbnail, filename, and file size.
 - Click any queued image to make it the active image in Squoosh.
-- Add or remove images without leaving Squoosh.
+- Add, remove, or clear images without leaving Squoosh.
 - Use the original Squoosh editing, compression, and download controls.
 - Keep images in the browser. The extension does not upload them to a separate service.
 
@@ -22,6 +22,10 @@ Squoosh Batch adds a multi-image queue to Squoosh. Select several images once, t
 5. Select the next image when ready.
 
 Squoosh Batch manages image selection and switching only. It does not automatically process or download images.
+
+## Keywords
+
+Squoosh batch, Squoosh bulk, bulk image compression, batch image compression, multiple image upload, compress multiple images, image compression queue.
 
 ## Development
 

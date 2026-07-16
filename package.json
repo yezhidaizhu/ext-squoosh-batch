@@ -1,6 +1,6 @@
 {
   "name": "squoosh-batch",
-  "description": "Batch image upload and image queue browser extension for Squoosh.app.",
+  "description": "Batch and bulk image upload workflow with a multi-image queue for Squoosh.app.",
   "private": true,
   "version": "0.0.0",
   "type": "module",

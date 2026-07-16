@@ -26,7 +26,7 @@ const { width: elementWidth, height: elementHeight } = useElementSize(containerR
 const { width: windowWidth, height: windowHeight } = useWindowSize()
 
 const GAP = 8
-const MIN_WIDTH = 160
+const MIN_WIDTH = 120
 const MIN_HEIGHT = 100
 const THROTTLE_WAIT = 20
 

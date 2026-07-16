@@ -51,7 +51,7 @@ let startClientX = 0;
 let startClientY = 0;
 let startHorizontal = 0;
 let startVertical = 0;
-let isDragging = false;
+const isDragging = ref(false);
 let didDrag = false;
 let lastDragAt = 0;
 
@@ -96,7 +96,7 @@ function clampPosition() {
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (!isDragging) return;
+  if (!isDragging.value) return;
 
   const deltaX = event.clientX - startClientX;
   const deltaY = event.clientY - startClientY;
@@ -112,7 +112,7 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function stopDrag() {
-  isDragging = false;
+  isDragging.value = false;
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
 }
@@ -125,7 +125,7 @@ function onPointerUp() {
 function onPointerDown(event: PointerEvent) {
   if (event.pointerType === 'mouse' && event.button !== 0) return;
 
-  isDragging = true;
+  isDragging.value = true;
   didDrag = false;
   startClientX = event.clientX;
   startClientY = event.clientY;
@@ -163,8 +163,8 @@ onBeforeUnmount(() => {
   <button
     ref="buttonRef"
     :style="style"
-    class="grid size-11 cursor-pointer touch-none place-items-center outline-none transition duration-150 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
-    :class="[props.bounds === 'viewport' ? 'fixed z-[2000]' : 'absolute z-10', props.buttonClass]"
+    class="grid size-11 cursor-pointer touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+    :class="[props.bounds === 'viewport' ? 'fixed z-[2000]' : 'absolute z-10', isDragging ? 'transition-none' : 'transition duration-150', props.buttonClass]"
     type="button"
     :aria-label="props.label"
     :title="title"
