@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useLocalStorage, useWindowSize } from '@vueuse/core';
-import { Image, ImagePlus, X } from '@lucide/vue';
+import { BrushCleaning, ImagePlus, X } from '@lucide/vue';
 import AppearTransition from './AppearTransition.vue';
-import DraggableIconButton from './DraggableIconButton.vue';
+import FloatingTooltip from './FloatingTooltip.vue';
 import MinimizedButton from './MinimizedButton.vue';
 import Win from './win.vue';
+import { runSquooshAutoZip, type SquooshAutoZipProgress } from '@/utils/squoosh-auto-zip';
+import { downloadBlob } from '@/utils/zip';
 
 type QueueItem = {
   id: string;
@@ -20,6 +22,11 @@ type WindowPosition = {
   height: number;
 };
 
+type TooltipState = {
+  text: string;
+  anchor: DOMRectReadOnly;
+};
+
 const { height: viewportHeight } = useWindowSize();
 const queue = ref<QueueItem[]>([]);
 const activeId = ref<string>();
@@ -27,8 +34,13 @@ const status = ref('');
 const isMinimized = ref(true);
 const isDraggingOver = ref(false);
 const fileInput = ref<HTMLInputElement>();
+const tooltip = ref<TooltipState>();
+const isAutoZipping = ref(false);
+const autoZipStatus = ref('');
+const autoZipDetail = ref('');
 const extensionIconUrl = browser.runtime.getURL('/icon/48.png');
 let isDispatchingToSquoosh = false;
+let autoZipAbortController: AbortController | undefined;
 const defaultWindowWidth = 120;
 const defaultWindowHeight = Math.min(500, Math.max(340, viewportHeight.value - 72));
 const windowPosition = useLocalStorage<WindowPosition>('squoosh-batch-window-position-left-top', {
@@ -49,6 +61,7 @@ function getFileKey(file: File) {
 }
 
 function addFiles(files: FileList | File[]) {
+  if (isAutoZipping.value) return [];
   const existingKeys = new Set(queue.value.map((item) => getFileKey(item.file)));
   const images = Array.from(files).filter(
     (file) => file.type.startsWith('image/') || /\.(avif|jxl|qoi|wp2)$/i.test(file.name),
@@ -80,7 +93,7 @@ function activate(item: QueueItem) {
   const target = document.querySelector<HTMLElement>('file-drop');
   if (!target) {
     status.value = 'Squoosh is still loading. Try again.';
-    return;
+    return false;
   }
   const transfer = new DataTransfer();
   transfer.items.add(item.file);
@@ -92,9 +105,11 @@ function activate(item: QueueItem) {
   }
   activeId.value = item.id;
   status.value = '';
+  return true;
 }
 
 function removeItem(id: string) {
+  if (isAutoZipping.value) return;
   const index = queue.value.findIndex((item) => item.id === id);
   if (index === -1) return;
   const shouldActivateNext = activeId.value === id;
@@ -108,10 +123,86 @@ function removeItem(id: string) {
 }
 
 function clearQueue() {
+  if (isAutoZipping.value) return;
   queue.value.forEach((item) => URL.revokeObjectURL(item.previewUrl));
   queue.value = [];
   activeId.value = undefined;
   status.value = '';
+}
+
+function showTooltip(event: Event, text: string) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  tooltip.value = {
+    text,
+    anchor: rect,
+  };
+}
+
+function hideTooltip() {
+  tooltip.value = undefined;
+}
+
+function formatAutoZipStatus(progress: SquooshAutoZipProgress) {
+  if (progress.phase === 'zipping') return 'ZIP';
+  return `${progress.index}/${progress.total}`;
+}
+
+function formatAutoZipDetail(progress: SquooshAutoZipProgress) {
+  if (progress.phase === 'zipping') return 'Creating ZIP…';
+  const filename = progress.filename ? ` ${progress.filename}` : '';
+  if (progress.phase === 'loading') return `Loading${filename}`;
+  if (progress.phase === 'waiting') return `Waiting for Squoosh${filename}`;
+  return `Collecting${filename}`;
+}
+
+function zipFileName() {
+  const date = new Date();
+  const stamp = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+  ].join('');
+  return `squoosh-batch-${stamp}.zip`;
+}
+
+async function startAutoZip() {
+  if (isAutoZipping.value || !queue.value.length) return;
+
+  autoZipAbortController = new AbortController();
+  isAutoZipping.value = true;
+  autoZipStatus.value = 'Starting';
+  autoZipDetail.value = 'Starting Auto ZIP…';
+  status.value = '';
+
+  try {
+    const zip = await runSquooshAutoZip({
+      items: [...queue.value],
+      activate,
+      signal: autoZipAbortController.signal,
+      onProgress: (progress) => {
+        autoZipStatus.value = formatAutoZipStatus(progress);
+        autoZipDetail.value = formatAutoZipDetail(progress);
+      },
+    });
+    downloadBlob(zip, zipFileName());
+    autoZipStatus.value = '';
+    autoZipDetail.value = '';
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+      status.value = error instanceof Error ? error.message : 'Auto ZIP failed.';
+    }
+    autoZipStatus.value = '';
+    autoZipDetail.value = '';
+  } finally {
+    isAutoZipping.value = false;
+    autoZipAbortController = undefined;
+  }
+}
+
+function cancelAutoZip() {
+  autoZipAbortController?.abort();
 }
 
 function onInputChange() {
@@ -183,6 +274,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  autoZipAbortController?.abort();
   document.removeEventListener('dragenter', onPageDragEnter, true);
   document.removeEventListener('dragover', onPageDragOver, true);
   document.removeEventListener('dragleave', onPageDragLeave, true);
@@ -194,21 +286,26 @@ onBeforeUnmount(() => {
 <template>
   <AppearTransition>
     <Win v-if="!isMinimized" :init-pos="windowPosition" :max-win-style="{ top: '12px', right: '12px', width: '320px', height: 'calc(100vh - 24px)' }" @chg-pos="windowPosition = $event" @mini-win="isMinimized = true" @close-win="isMinimized = true">
-      <template #title><span class="inline-flex h-full items-center gap-2"><img class="size-5 rounded-[var(--radius-control)]" :src="extensionIconUrl" alt="" /> Batch</span></template>
+      <template #title><span class="inline-flex h-full items-center gap-1.5"><img class="size-4 rounded-[var(--radius-control)]" :src="extensionIconUrl" alt="" /> Batch</span></template>
       <div class="relative flex h-full min-h-0 flex-col bg-[var(--bg-primary)] text-[var(--text-primary)]" @dragover.prevent @dragenter.prevent="isDraggingOver = true" @dragleave="onDragLeave" @drop="onDrop">
         <input ref="fileInput" class="sr-only" type="file" accept="image/*,.avif,.jxl,.qoi,.wp2" multiple @change="onInputChange" />
         <p v-if="status" class="mx-3 mt-3 text-[12px] leading-4 text-red-700" role="status">{{ status }}</p>
         <div v-if="queue.length" class="flex h-8 shrink-0 items-center justify-between px-2.5">
-            <span class="inline-flex items-center gap-1 text-[11px] font-semibold leading-none text-[var(--text-secondary)] tabular-nums"><span>{{ queue.length }}</span><Image :size="12" aria-hidden="true" /></span>
-            <button class="h-6 cursor-pointer rounded-[var(--radius-control)] px-2 text-[11px] font-semibold text-[var(--brand-primary)] transition-colors duration-150 hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Clear image queue" title="Clear image queue" @click="clearQueue">Clear</button>
+            <span class="text-[11px] font-semibold leading-none text-[var(--text-secondary)] tabular-nums">{{ isAutoZipping ? autoZipStatus : queue.length }}</span>
+            <span class="flex items-center gap-1">
+              <button v-if="!isAutoZipping" class="h-6 cursor-pointer rounded-[var(--radius-control)] px-1.5 text-[10px] font-bold leading-none text-[var(--brand-primary)] transition-colors duration-150 hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Auto ZIP" @mouseenter="showTooltip($event, 'Use current Squoosh settings, process the queue, then download a ZIP.')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Use current Squoosh settings, process the queue, then download a ZIP.')" @blur="hideTooltip" @click="startAutoZip">Auto ZIP</button>
+              <button v-else class="h-6 cursor-pointer rounded-[var(--radius-control)] px-1.5 text-[10px] font-bold leading-none text-red-600 transition-colors duration-150 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500" type="button" aria-label="Stop Auto ZIP" @mouseenter="showTooltip($event, 'Stop Auto ZIP')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Stop Auto ZIP')" @blur="hideTooltip" @click="cancelAutoZip">Stop</button>
+              <button class="grid size-6 place-items-center rounded-[var(--radius-control)] text-[var(--brand-primary)] transition-colors duration-150 hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-40" type="button" aria-label="Clear image queue" :disabled="isAutoZipping" @mouseenter="showTooltip($event, 'Clear queue')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Clear queue')" @blur="hideTooltip" @click="clearQueue"><BrushCleaning :size="14" :stroke-width="1.9" aria-hidden="true" /></button>
+            </span>
         </div>
+        <div v-if="isAutoZipping" class="mx-2.5 mb-1 truncate rounded-[var(--radius-control)] bg-[rgba(255,0,102,0.07)] px-2 py-1 text-[10px] font-medium leading-none text-[var(--brand-primary)]" :title="autoZipDetail">{{ autoZipDetail }}</div>
         <ul v-if="queue.length" class="scroll-thin m-0 grid min-h-0 flex-1 grid-cols-[repeat(auto-fit,minmax(96px,1fr))] content-start gap-2 overflow-x-hidden overflow-y-auto px-2.5 pb-2.5 pt-1" aria-label="Queued images">
           <li v-for="item in queue" :key="item.id" class="group relative min-w-0">
-            <button class="relative block aspect-[3/4] w-full cursor-pointer rounded-[var(--radius-control)] bg-[var(--bg-secondary)] text-left shadow-[0_1px_2px_rgba(239,97,128,0.08)] ring-0 ring-[var(--brand-primary)] outline-none transition-shadow duration-200 ease-out group-hover:shadow-[0_8px_18px_rgba(239,97,128,0.22)] group-hover:ring-2 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" :class="{ 'ring-2 shadow-[0_8px_18px_rgba(239,97,128,0.18)]': item.id === activeId }" type="button" :aria-current="item.id === activeId" :aria-label="`Edit ${item.file.name} in Squoosh`" @click="activate(item)">
+            <button class="relative block aspect-[3/4] w-full rounded-[var(--radius-control)] bg-[var(--bg-secondary)] text-left shadow-[0_1px_2px_rgba(239,97,128,0.08)] ring-0 ring-[var(--brand-primary)] outline-none transition-shadow duration-200 ease-out group-hover:shadow-[0_8px_18px_rgba(239,97,128,0.22)] group-hover:ring-2 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-70" :class="[{ 'ring-2 shadow-[0_8px_18px_rgba(239,97,128,0.18)]': item.id === activeId }, isAutoZipping ? '' : 'cursor-pointer']" type="button" :disabled="isAutoZipping" :aria-current="item.id === activeId" :aria-label="`Edit ${item.file.name} in Squoosh`" @click="activate(item)">
               <img class="size-full rounded-[var(--radius-control)] object-cover" :src="item.previewUrl" alt="" />
               <span class="absolute bottom-0 right-0 rounded-tl-[var(--radius-control)] rounded-br-none bg-black/48 px-1.5 py-1 text-[10px] font-semibold leading-none text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] backdrop-blur-md tabular-nums">{{ formatBytes(item.file.size) }}</span>
             </button>
-            <button class="absolute right-0 top-0 grid size-[21px] cursor-pointer place-items-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white opacity-0 outline-none transition-colors duration-150 ease-out hover:bg-[var(--brand-primary-hover)] focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] group-hover:opacity-100" type="button" :aria-label="`Remove ${item.file.name}`" :title="`Remove ${item.file.name}`" @click="removeItem(item.id)"><X :size="13" :stroke-width="2.6" aria-hidden="true" /></button>
+            <button class="absolute right-0 top-0 grid size-[21px] cursor-pointer place-items-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white opacity-0 outline-none transition-colors duration-150 ease-out hover:bg-[var(--brand-primary-hover)] focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-0 group-hover:opacity-100" type="button" :disabled="isAutoZipping" :aria-label="`Remove ${item.file.name}`" :title="`Remove ${item.file.name}`" @click="removeItem(item.id)"><X :size="13" :stroke-width="2.6" aria-hidden="true" /></button>
           </li>
         </ul>
         <div v-else class="grid min-h-0 flex-1 place-items-center text-center text-[var(--text-tertiary)]">
@@ -232,4 +329,5 @@ onBeforeUnmount(() => {
   <AppearTransition name="fade">
     <div v-if="isDraggingOver" class="pointer-events-none fixed inset-3 z-[1999] rounded-[var(--radius-panel)] border-2 border-dashed border-[var(--brand-primary)] bg-[rgba(255,0,102,0.045)]" aria-hidden="true" />
   </AppearTransition>
+  <FloatingTooltip :text="tooltip?.text" :anchor="tooltip?.anchor" />
 </template>
