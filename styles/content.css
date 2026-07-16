@@ -27,8 +27,8 @@
 #squoosh-batch-root *::before,
 #squoosh-batch-root *::after { box-sizing: border-box; }
 
-#squoosh-batch-root .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
-#squoosh-batch-root .scroll-thin::-webkit-scrollbar { width: 1px; }
+#squoosh-batch-root .scroll-thin { overflow-y: overlay; scrollbar-width: none; scrollbar-color: transparent transparent; }
+#squoosh-batch-root .scroll-thin::-webkit-scrollbar { width: 0; }
 #squoosh-batch-root .scroll-thin::-webkit-scrollbar-track { background: transparent; }
 #squoosh-batch-root .scroll-thin::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--scrollbar-thumb); }
 #squoosh-batch-root .scroll-thin::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }

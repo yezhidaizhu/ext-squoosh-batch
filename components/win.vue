@@ -37,6 +37,7 @@ const width = ref<number>(420)
 const height = ref<number>(240)
 
 let mode: 'drag' | 'resize' | null = null
+let resizeAxis: 'x' | 'y' | 'both' | null = null
 
 let startClientX = 0
 let startClientY = 0
@@ -107,11 +108,24 @@ const onPointerMove = throttle((e: PointerEvent) => {
   }
 
   if (mode === 'resize') {
-    const nextWidth = startWidth + (e.clientX - startClientX)
-    const nextHeight = startHeight + (e.clientY - startClientY)
+    const deltaX = e.clientX - startClientX
+    const deltaY = e.clientY - startClientY
+    const absDeltaX = Math.abs(deltaX)
+    const absDeltaY = Math.abs(deltaY)
 
-    width.value = clampValue(nextWidth, MIN_WIDTH, windowWidth.value - left.value)
-    height.value = clampValue(nextHeight, MIN_HEIGHT, windowHeight.value - top.value)
+    if (!resizeAxis && Math.max(absDeltaX, absDeltaY) > 6) {
+      resizeAxis = absDeltaX > absDeltaY * 1.4
+        ? 'x'
+        : absDeltaY > absDeltaX * 1.4
+          ? 'y'
+          : 'both'
+    }
+
+    const nextWidth = startWidth + (resizeAxis === 'y' ? 0 : deltaX)
+    const nextHeight = startHeight + (resizeAxis === 'x' ? 0 : deltaY)
+
+    if (resizeAxis !== 'y') width.value = clampValue(nextWidth, MIN_WIDTH, windowWidth.value - left.value)
+    if (resizeAxis !== 'x') height.value = clampValue(nextHeight, MIN_HEIGHT, windowHeight.value - top.value)
 
     fix()
   }
@@ -136,6 +150,7 @@ function onDragPointerDown(e: PointerEvent) {
 
 function onResizePointerDown(e: PointerEvent) {
   mode = 'resize'
+  resizeAxis = null
 
   startClientX = e.clientX
   startClientY = e.clientY
@@ -151,6 +166,7 @@ function onResizePointerDown(e: PointerEvent) {
 
 function onPointerUp() {
   mode = null
+  resizeAxis = null
 
   onPointerMove.flush()
   fix()
@@ -175,12 +191,23 @@ watch([elementWidth, elementHeight], () => {
   }
 })
 
+watch(() => props.initPos, (position) => {
+  if (!position) return;
+
+  left.value = position.left;
+  top.value = position.top;
+  width.value = position.width;
+  height.value = position.height;
+  void nextTick().then(fix);
+}, { deep: true })
+
 watch([windowWidth, windowHeight], () => {
   fix()
 })
 
 onBeforeUnmount(() => {
   mode = null
+  resizeAxis = null
   onPointerMove.cancel()
 
   window.removeEventListener('pointermove', onPointerMove)

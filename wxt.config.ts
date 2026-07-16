@@ -13,7 +13,7 @@ export default defineConfig({
     name: 'Squoosh Batch',
     description:
       'Batch image upload and image queue browser extension for Squoosh.app.',
-    permissions: ['storage'],
+    permissions: ['storage', 'tabs'],
     action: {
       default_title: 'Squoosh Batch',
     },

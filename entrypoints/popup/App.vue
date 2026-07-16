@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { ImagePlus, RotateCcw } from '@lucide/vue';
-import { getSettings, resetSettings, saveSettings } from '@/utils/settings';
+import { getSettings, RESET_LAYOUT_MESSAGE, resetSettings, saveSettings } from '@/utils/settings';
 
 const enabled = ref(true);
 const isReady = ref(false);
@@ -21,6 +21,10 @@ async function updateEnabled(event: Event) {
 async function restoreDefaults() {
   isResetting.value = true;
   await resetSettings();
+  const tabs = await browser.tabs.query({ url: 'https://squoosh.app/*' });
+  await Promise.all(tabs.flatMap((tab) => tab.id
+    ? [browser.tabs.sendMessage(tab.id, RESET_LAYOUT_MESSAGE).catch(() => undefined)]
+    : []));
   enabled.value = true;
   isResetting.value = false;
 }

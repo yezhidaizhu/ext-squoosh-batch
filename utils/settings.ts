@@ -1,4 +1,10 @@
 export const SETTINGS_KEY = 'squoosh-batch-settings';
+export const RESET_LAYOUT_MESSAGE = 'squoosh-batch:reset-layout';
+export const layoutStorageKeys = [
+  'squoosh-batch-window-position-left-top',
+  'squoosh-batch-add-button-position-right-bottom',
+  'squoosh-batch-minimized-position-left-top',
+];
 
 export type ExtensionSettings = {
   enabled: boolean;

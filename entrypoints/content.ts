@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 import QueueWindow from '@/components/QueueWindow.vue';
 import '../styles/content.css';
-import { getSettings, SETTINGS_KEY } from '@/utils/settings';
+import { getSettings, layoutStorageKeys, RESET_LAYOUT_MESSAGE, SETTINGS_KEY } from '@/utils/settings';
 
 export default defineContentScript({
   matches: ['https://squoosh.app/*'],
@@ -31,6 +31,15 @@ export default defineContentScript({
     void syncExtensionState();
     browser.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'local' && changes[SETTINGS_KEY]) void syncExtensionState();
+    });
+
+    browser.runtime.onMessage.addListener((message) => {
+      if (message !== RESET_LAYOUT_MESSAGE) return;
+
+      layoutStorageKeys.forEach((key) => {
+        localStorage.removeItem(key);
+        window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+      });
     });
   },
 });

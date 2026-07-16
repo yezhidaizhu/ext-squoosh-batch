@@ -14,7 +14,7 @@ const emit = defineEmits<{
 <template>
   <DraggableIconButton
     storage-key="squoosh-batch-minimized-position-left-top"
-    :default-position="{ left: 16, top: 16 }"
+    :default-position="{ left: 16, top: 82 }"
     bounds="viewport"
     :gap="0"
     label="Open Squoosh Batch image queue"

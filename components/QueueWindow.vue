@@ -20,7 +20,7 @@ type WindowPosition = {
   height: number;
 };
 
-const { width: viewportWidth, height: viewportHeight } = useWindowSize();
+const { height: viewportHeight } = useWindowSize();
 const queue = ref<QueueItem[]>([]);
 const activeId = ref<string>();
 const status = ref('');
@@ -29,11 +29,11 @@ const isDraggingOver = ref(false);
 const fileInput = ref<HTMLInputElement>();
 const extensionIconUrl = browser.runtime.getURL('/icon/48.png');
 let isDispatchingToSquoosh = false;
-const defaultWindowWidth = 320;
+const defaultWindowWidth = 120;
 const defaultWindowHeight = Math.min(500, Math.max(340, viewportHeight.value - 72));
 const windowPosition = useLocalStorage<WindowPosition>('squoosh-batch-window-position-left-top', {
-  left: Math.max(12, viewportWidth.value - defaultWindowWidth - 12),
-  top: Math.max(12, viewportHeight.value - defaultWindowHeight - 12),
+  left: 12,
+  top: 82,
   width: defaultWindowWidth,
   height: defaultWindowHeight,
 });
@@ -44,12 +44,22 @@ function formatBytes(bytes: number) {
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getFileKey(file: File) {
+  return `${file.name}::${file.size}::${file.lastModified}`;
+}
+
 function addFiles(files: FileList | File[]) {
+  const existingKeys = new Set(queue.value.map((item) => getFileKey(item.file)));
   const images = Array.from(files).filter(
     (file) => file.type.startsWith('image/') || /\.(avif|jxl|qoi|wp2)$/i.test(file.name),
-  );
+  ).filter((file) => {
+    const key = getFileKey(file);
+    if (existingKeys.has(key)) return false;
+    existingKeys.add(key);
+    return true;
+  });
   if (!images.length) {
-    status.value = 'Choose an image supported by Squoosh.';
+    status.value = '';
     return [];
   }
   const items = images.map((file) => ({
@@ -87,9 +97,14 @@ function activate(item: QueueItem) {
 function removeItem(id: string) {
   const index = queue.value.findIndex((item) => item.id === id);
   if (index === -1) return;
+  const shouldActivateNext = activeId.value === id;
   const [item] = queue.value.splice(index, 1);
   URL.revokeObjectURL(item.previewUrl);
-  if (activeId.value === id) activeId.value = undefined;
+  if (shouldActivateNext) {
+    activeId.value = undefined;
+    const nextItem = queue.value[index] ?? queue.value[index - 1];
+    if (nextItem) activate(nextItem);
+  }
 }
 
 function clearQueue() {
@@ -187,7 +202,7 @@ onBeforeUnmount(() => {
             <span class="inline-flex items-center gap-1 text-[11px] font-semibold leading-none text-[var(--text-secondary)] tabular-nums"><span>{{ queue.length }}</span><Image :size="12" aria-hidden="true" /></span>
             <button class="h-6 cursor-pointer rounded-[var(--radius-control)] px-2 text-[11px] font-semibold text-[var(--brand-primary)] transition-colors duration-150 hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Clear image queue" title="Clear image queue" @click="clearQueue">Clear</button>
         </div>
-        <ul v-if="queue.length" class="scroll-thin m-0 grid min-h-0 flex-1 grid-cols-[repeat(auto-fit,minmax(76px,1fr))] content-start gap-2 overflow-y-auto px-2.5 pt-1 pb-18" aria-label="Queued images">
+        <ul v-if="queue.length" class="scroll-thin m-0 grid min-h-0 flex-1 grid-cols-[repeat(auto-fit,minmax(96px,1fr))] content-start gap-2 overflow-x-hidden overflow-y-auto px-2.5 pb-2.5 pt-1" aria-label="Queued images">
           <li v-for="item in queue" :key="item.id" class="group relative min-w-0">
             <button class="relative block aspect-[3/4] w-full cursor-pointer rounded-[var(--radius-control)] bg-[var(--bg-secondary)] text-left shadow-[0_1px_2px_rgba(239,97,128,0.08)] ring-0 ring-[var(--brand-primary)] outline-none transition-shadow duration-200 ease-out group-hover:shadow-[0_8px_18px_rgba(239,97,128,0.22)] group-hover:ring-2 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" :class="{ 'ring-2 shadow-[0_8px_18px_rgba(239,97,128,0.18)]': item.id === activeId }" type="button" :aria-current="item.id === activeId" :aria-label="`Edit ${item.file.name} in Squoosh`" @click="activate(item)">
               <img class="size-full rounded-[var(--radius-control)] object-cover" :src="item.previewUrl" alt="" />
@@ -196,13 +211,13 @@ onBeforeUnmount(() => {
             <button class="absolute right-0 top-0 grid size-[21px] cursor-pointer place-items-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white opacity-0 outline-none transition-colors duration-150 ease-out hover:bg-[var(--brand-primary-hover)] focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] group-hover:opacity-100" type="button" :aria-label="`Remove ${item.file.name}`" :title="`Remove ${item.file.name}`" @click="removeItem(item.id)"><X :size="13" :stroke-width="2.6" aria-hidden="true" /></button>
           </li>
         </ul>
-        <div v-else class="grid min-h-0 flex-1 place-items-center p-4 text-center text-[var(--text-tertiary)]">
-          <button class="grid min-h-[112px] w-full max-w-[210px] cursor-pointer place-items-center rounded-[var(--radius-control)] border border-dashed border-[rgba(255,0,102,0.28)] bg-[rgba(255,0,102,0.045)] px-4 py-3 outline-none transition-colors duration-150 ease-out hover:border-[rgba(255,0,102,0.42)] focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Add images" @click="fileInput?.click()">
+        <div v-else class="grid min-h-0 flex-1 place-items-center text-center text-[var(--text-tertiary)]">
+          <button class="group grid min-h-11 w-full cursor-pointer place-items-center outline-none transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Add images" @click="fileInput?.click()">
           <span class="grid place-items-center gap-2.5">
-            <span class="grid size-5 place-items-center text-[var(--text-tertiary)]"><ImagePlus :size="18" aria-hidden="true" /></span>
+            <span class="grid size-5 place-items-center text-[var(--text-tertiary)] transition-colors duration-150 group-hover:text-[var(--brand-primary)]"><ImagePlus :size="18" aria-hidden="true" /></span>
             <span class="grid gap-0.5">
-              <span class="text-[12px] font-medium leading-none text-[var(--text-secondary)]">Drop images here</span>
-              <span class="text-[11px] leading-4 text-[var(--text-tertiary)]">or click to choose</span>
+              <span class="text-[12px] font-medium leading-none text-[var(--text-secondary)] transition-colors duration-150 group-hover:text-[var(--brand-primary)]">Drop images here</span>
+              <span class="text-[11px] leading-4 text-[var(--text-tertiary)] transition-colors duration-150 group-hover:text-[var(--brand-primary)]">or click to choose</span>
             </span>
           </span>
           </button>
