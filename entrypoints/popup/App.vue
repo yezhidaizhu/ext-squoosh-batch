@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { ImagePlus, RotateCcw } from '@lucide/vue';
+import { RotateCcw } from '@lucide/vue';
 import { getSettings, RESET_LAYOUT_MESSAGE, resetSettings, saveSettings } from '@/utils/settings';
 
 const enabled = ref(true);
 const isReady = ref(false);
 const isResetting = ref(false);
+const brandIconUrl = browser.runtime.getURL('/icon/32.png');
 
 onMounted(async () => {
   enabled.value = (await getSettings()).enabled;
@@ -28,12 +29,26 @@ async function restoreDefaults() {
   enabled.value = true;
   isResetting.value = false;
 }
+
+async function openSquoosh() {
+  const [existingTab] = await browser.tabs.query({ url: 'https://squoosh.app/*' });
+
+  if (existingTab?.id) {
+    await browser.tabs.update(existingTab.id, { active: true });
+    if (existingTab.windowId !== undefined) await browser.windows.update(existingTab.windowId, { focused: true });
+    return;
+  }
+
+  await browser.tabs.create({ url: 'https://squoosh.app/' });
+}
 </script>
 
 <template>
   <main class="popup">
     <header class="brand">
-      <span class="brand-icon" aria-hidden="true"><ImagePlus :size="19" :stroke-width="2" /></span>
+      <span class="brand-icon" aria-hidden="true">
+        <img class="brand-icon-img" :src="brandIconUrl" alt="" />
+      </span>
       <span class="brand-copy">
         <strong>Squoosh Batch</strong>
         <small>Batch image uploads for Squoosh.</small>
@@ -64,8 +79,8 @@ async function restoreDefaults() {
       </div>
     </section>
 
-    <a class="site-button" href="https://squoosh.app/" target="_blank" rel="noreferrer" aria-label="Open Squoosh">
+    <button class="site-button" type="button" @click="openSquoosh">
       Open Squoosh
-    </a>
+    </button>
   </main>
 </template>

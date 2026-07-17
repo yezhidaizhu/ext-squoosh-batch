@@ -40,10 +40,14 @@ const style = computed(() => (props.anchor === 'right-bottom'
   ? {
       right: `${getHorizontalPosition()}px`,
       bottom: `${getVerticalPosition()}px`,
+      width: `${props.size}px`,
+      height: `${props.size}px`,
     }
   : {
       left: `${getHorizontalPosition()}px`,
       top: `${getVerticalPosition()}px`,
+      width: `${props.size}px`,
+      height: `${props.size}px`,
     }));
 
 let resizeObserver: ResizeObserver | undefined;
@@ -163,7 +167,7 @@ onBeforeUnmount(() => {
   <button
     ref="buttonRef"
     :style="style"
-    class="grid size-11 cursor-pointer touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+    class="grid cursor-pointer touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
     :class="[props.bounds === 'viewport' ? 'fixed z-[2000]' : 'absolute z-10', isDragging ? 'transition-none' : 'transition duration-150', props.buttonClass]"
     type="button"
     :aria-label="props.label"

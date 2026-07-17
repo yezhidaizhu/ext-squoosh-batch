@@ -40,6 +40,7 @@ const autoZipStatus = ref('');
 const autoZipDetail = ref('');
 const extensionIconUrl = browser.runtime.getURL('/icon/48.png');
 let isDispatchingToSquoosh = false;
+let nativeInputObserver: MutationObserver | undefined;
 let autoZipAbortController: AbortController | undefined;
 const defaultWindowWidth = 120;
 const defaultWindowHeight = Math.min(500, Math.max(340, viewportHeight.value - 72));
@@ -206,10 +207,7 @@ function cancelAutoZip() {
 }
 
 function onInputChange() {
-  if (fileInput.value?.files) {
-    const added = addFiles(fileInput.value.files);
-    if (!activeId.value && added[0]) activate(added[0]);
-  }
+  if (fileInput.value?.files) handleAddedFiles(fileInput.value.files);
   if (fileInput.value) fileInput.value.value = '';
 }
 
@@ -217,10 +215,7 @@ function onDrop(event: DragEvent) {
   event.preventDefault();
   event.stopPropagation();
   isDraggingOver.value = false;
-  if (event.dataTransfer?.files) {
-    const added = addFiles(event.dataTransfer.files);
-    if (!activeId.value && added[0]) activate(added[0]);
-  }
+  if (event.dataTransfer?.files) handleAddedFiles(event.dataTransfer.files);
 }
 
 function onDragLeave(event: DragEvent) {
@@ -260,13 +255,37 @@ function onPageDrop(event: DragEvent) {
   isDraggingOver.value = false;
   document.querySelector<HTMLElement>('file-drop')
     ?.dispatchEvent(new DragEvent('dragleave', { bubbles: true, cancelable: true }));
-  if (event.dataTransfer?.files) {
-    const added = addFiles(event.dataTransfer.files);
-    if (added[0]) activate(added[0]);
-  }
+  if (event.dataTransfer?.files) handleAddedFiles(event.dataTransfer.files, true);
+}
+
+function handleAddedFiles(files: FileList | File[], shouldAlwaysActivateFirst = false) {
+  const added = addFiles(files);
+  if ((shouldAlwaysActivateFirst || !activeId.value) && added[0]) activate(added[0]);
+}
+
+function patchNativeFileInputs() {
+  document.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach((input) => {
+    if (input === fileInput.value) return;
+    input.multiple = true;
+  });
+}
+
+function onNativeFileInputChange(event: Event) {
+  if (isDispatchingToSquoosh || isAutoZipping.value) return;
+  const input = event.target as HTMLInputElement | null;
+  if (!input || input === fileInput.value || input.type !== 'file' || !input.files?.length) return;
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  handleAddedFiles(input.files, true);
+  input.value = '';
 }
 
 onMounted(() => {
+  patchNativeFileInputs();
+  nativeInputObserver = new MutationObserver(patchNativeFileInputs);
+  nativeInputObserver.observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('change', onNativeFileInputChange, true);
   document.addEventListener('dragenter', onPageDragEnter, true);
   document.addEventListener('dragover', onPageDragOver, true);
   document.addEventListener('dragleave', onPageDragLeave, true);
@@ -275,6 +294,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   autoZipAbortController?.abort();
+  nativeInputObserver?.disconnect();
+  document.removeEventListener('change', onNativeFileInputChange, true);
   document.removeEventListener('dragenter', onPageDragEnter, true);
   document.removeEventListener('dragover', onPageDragOver, true);
   document.removeEventListener('dragleave', onPageDragLeave, true);
@@ -293,9 +314,9 @@ onBeforeUnmount(() => {
         <div v-if="queue.length" class="flex h-8 shrink-0 items-center justify-between px-2.5">
             <span class="text-[11px] font-semibold leading-none text-[var(--text-secondary)] tabular-nums">{{ isAutoZipping ? autoZipStatus : queue.length }}</span>
             <span class="flex items-center gap-1">
-              <button v-if="!isAutoZipping" class="h-6 cursor-pointer rounded-[var(--radius-control)] px-1.5 text-[10px] font-bold leading-none text-[var(--brand-primary)] transition-colors duration-150 hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Auto ZIP" @mouseenter="showTooltip($event, 'Use current Squoosh settings, process the queue, then download a ZIP.')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Use current Squoosh settings, process the queue, then download a ZIP.')" @blur="hideTooltip" @click="startAutoZip">Auto ZIP</button>
+              <button v-if="!isAutoZipping" class="h-6 cursor-pointer rounded-[var(--radius-control)] border border-[rgba(255,0,102,0.18)] bg-[rgba(255,0,102,0.06)] px-1.5 text-[10px] font-bold leading-none text-[var(--brand-primary)] transition-colors duration-150 hover:border-[rgba(255,0,102,0.30)] hover:bg-[rgba(255,0,102,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]" type="button" aria-label="Auto ZIP" @mouseenter="showTooltip($event, 'Use the right-side Squoosh output for each image and download a ZIP.')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Use the right-side Squoosh output for each image and download a ZIP.')" @blur="hideTooltip" @click="startAutoZip">Auto ZIP</button>
               <button v-else class="h-6 cursor-pointer rounded-[var(--radius-control)] px-1.5 text-[10px] font-bold leading-none text-red-600 transition-colors duration-150 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500" type="button" aria-label="Stop Auto ZIP" @mouseenter="showTooltip($event, 'Stop Auto ZIP')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Stop Auto ZIP')" @blur="hideTooltip" @click="cancelAutoZip">Stop</button>
-              <button class="grid size-6 place-items-center rounded-[var(--radius-control)] text-[var(--brand-primary)] transition-colors duration-150 hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-40" type="button" aria-label="Clear image queue" :disabled="isAutoZipping" @mouseenter="showTooltip($event, 'Clear queue')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Clear queue')" @blur="hideTooltip" @click="clearQueue"><BrushCleaning :size="14" :stroke-width="1.9" aria-hidden="true" /></button>
+              <button class="grid size-6 place-items-center rounded-[var(--radius-control)] border border-[rgba(255,0,102,0.16)] bg-white/70 text-[var(--brand-primary)] transition-colors duration-150 hover:border-[rgba(255,0,102,0.28)] hover:bg-[rgba(255,0,102,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-40" type="button" aria-label="Clear image queue" :disabled="isAutoZipping" @mouseenter="showTooltip($event, 'Clear queue')" @mouseleave="hideTooltip" @focus="showTooltip($event, 'Clear queue')" @blur="hideTooltip" @click="clearQueue"><BrushCleaning :size="14" :stroke-width="1.9" aria-hidden="true" /></button>
             </span>
         </div>
         <div v-if="isAutoZipping" class="mx-2.5 mb-1 truncate rounded-[var(--radius-control)] bg-[rgba(255,0,102,0.07)] px-2 py-1 text-[10px] font-medium leading-none text-[var(--brand-primary)]" :title="autoZipDetail">{{ autoZipDetail }}</div>

@@ -24,12 +24,13 @@ button { touch-action: manipulation; }
 .popup { padding: 16px; }
 
 .brand { display: flex; min-height: 36px; align-items: center; gap: 10px; margin: 2px 2px 14px; }
-.brand-icon { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 7px; background: var(--accent); color: #fff; }
+.brand-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; }
+.brand-icon-img { display: block; width: 30px; height: 30px; object-fit: contain; }
 .brand-copy, .setting-copy { display: grid; min-width: 0; gap: 2px; }
 .brand-copy { flex: 1; }
 .brand strong { font-size: 15px; font-weight: 700; line-height: 1.25; }
 .brand small, .setting-copy small { color: var(--muted); font-size: 11px; line-height: 1.35; }
-.site-button { display: flex; min-height: 38px; align-items: center; justify-content: center; margin-top: 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; transition: background 160ms ease-out, border-color 160ms ease-out; }
+.site-button { display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: center; margin-top: 12px; cursor: pointer; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; transition: background 160ms ease-out, border-color 160ms ease-out; }
 .site-button:hover { border-color: var(--accent-strong); background: var(--accent-strong); }
 .site-button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 

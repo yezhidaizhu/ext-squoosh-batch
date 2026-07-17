@@ -12,7 +12,7 @@ export default defineConfig({
   manifest: {
     name: 'Squoosh Batch',
     description:
-      'Batch image upload and image queue browser extension for Squoosh.app.',
+      'Batch and bulk image upload workflow with a multi-image queue for Squoosh.app.',
     permissions: ['storage', 'tabs'],
     action: {
       default_title: 'Squoosh Batch',
